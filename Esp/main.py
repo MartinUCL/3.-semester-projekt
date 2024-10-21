@@ -1,12 +1,7 @@
-import network
-import time
-import machine
+import network, time, machine, ucryptolib, ubinascii, os
 import ujson as json
 import uasyncio as asyncio
 from machine import Pin
-import os  # To handle file operations
-import ucryptolib
-import ubinascii
 
 # Pin Configuration
 LED_PIN = 4          # GPIO for the state LED
