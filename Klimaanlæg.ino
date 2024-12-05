@@ -44,7 +44,9 @@ void setup() {
 }
 
 
+
 void loop() {
+  /**
   Serial.println("Please enter your password: ");
 
   while (Serial.available() == 0) {
@@ -57,10 +59,9 @@ void loop() {
   } else
     Serial.println("Password incorrect");
 
+  */
 
 
-
-  /**
   uint8_t result = 0 ; 
   uint8_t responses = 0 ; 
   uint16_t data[ 10 ]; 
@@ -80,7 +81,7 @@ void loop() {
         Serial.print("Modbus error: ");
         Serial.println(result);
     }
-  }*/
+  }
 
   delay(2000);
 }
