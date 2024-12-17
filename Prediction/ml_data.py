@@ -60,7 +60,7 @@ def get_stations(parameter_name):
     Returns:
         list: A list of stations that have the specified parameter.
     """
-    stations = client.get_stations(limit=10000)
+    stations = client.get_stations(limit=500)
     stations_with_parameter = [
         station for station in stations 
         if parameter_name in station['properties'].get('parameterId', [])
@@ -142,52 +142,76 @@ def average_hourly(observations, decimals=1):
 def get_cloud_cover(from_time, to_time, coords=DEFAULT_COORDS):
     """
     Retrieve cloud cover data from the closest station and average hourly.
-    
-    Args:
-        from_time (datetime): Start time for data collection.
-        to_time (datetime): End time for data collection.
-        coords (list): Coordinates [longitude, latitude] to search closest station.
-    
-    Returns:
-        list: A list of averaged cloud cover values (24 measurements).
     """
-    stations_with_cloud = get_stations('cloud_cover')
+    try:
+        stations_with_cloud = get_stations('cloud_cover')
 
-    if not stations_with_cloud:
-        raise ValueError("No stations available for cloud cover data.")
+        if not stations_with_cloud:
+            print(f"No stations available for cloud cover data on {from_time.date()}. Skipping.")
+            return None
 
-    closest_station = find_closest_station(stations_with_cloud, coords)
-    observations = get_observations(Parameter.CloudCover, closest_station['properties']['stationId'], from_time, to_time)
+        closest_station = find_closest_station(stations_with_cloud, coords)
+        observations = get_observations(Parameter.CloudCover, closest_station['properties']['stationId'], from_time, to_time)
+
+        if not observations:
+            print(f"No observations returned for cloud cover on {from_time.date()}. Skipping.")
+            return None
+
+        return average_hourly(observations)
     
-    if not observations:
-        raise ValueError("No observations returned for cloud cover.")
+    except Exception as e:
+        print(f"Error retrieving cloud cover data for {from_time.date()}: {e}. Skipping.")
+        return None
 
-    return average_hourly(observations)
 
 def get_temperature(from_time, to_time, coords=DEFAULT_COORDS):
     """
     Retrieve temperature data from the closest station and average hourly.
-    
-    Args:
-        from_time (datetime): Start time for data collection.
-        to_time (datetime): End time for data collection.
-        coords (list): Coordinates [longitude, latitude] to search closest station.
-    
-    Returns:
-        list: A list of averaged temperature values (24 measurements).
     """
-    stations_with_temp = get_stations('temp_dry')
-    
-    if not stations_with_temp:
-        raise ValueError("No stations available for temperature data.")
-    
-    closest_station = find_closest_station(stations_with_temp, coords)
-    observations = get_observations(Parameter.TempDry, closest_station['properties']['stationId'], from_time, to_time)
-    
-    if not observations:
-        raise ValueError("No observations returned for temperature.")
+    try:
+        stations_with_temp = get_stations('temp_dry')
 
-    return average_hourly(observations)
+        if not stations_with_temp:
+            print(f"No stations available for temperature data on {from_time.date()}. Skipping.")
+            return None
+
+        closest_station = find_closest_station(stations_with_temp, coords)
+        observations = get_observations(Parameter.TempDry, closest_station['properties']['stationId'], from_time, to_time)
+
+        if not observations:
+            print(f"No observations returned for temperature on {from_time.date()}. Skipping.")
+            return None
+
+        return average_hourly(observations)
+    
+    except Exception as e:
+        print(f"Error retrieving temperature data for {from_time.date()}: {e}. Skipping.")
+        return None
+
+
+def get_wind_speed(from_time, to_time, coords=DEFAULT_COORDS):
+    """
+    Retrieve wind speed data from the closest station and average hourly.
+    """
+    try:
+        stations_with_wind_speed = get_stations('wind_speed')
+
+        if not stations_with_wind_speed:
+            print(f"No stations available for wind speed data on {from_time.date()}. Skipping.")
+            return None
+
+        closest_station = find_closest_station(stations_with_wind_speed, coords)
+        observations = get_observations(Parameter.WindSpeed, closest_station['properties']['stationId'], from_time, to_time)
+
+        if not observations:
+            print(f"No observations returned for wind speed on {from_time.date()}. Skipping.")
+            return None
+
+        return average_hourly(observations)
+    
+    except Exception as e:
+        print(f"Error retrieving wind speed data for {from_time.date()}: {e}. Skipping.")
+        return None
 
 def fetch_response_data(api_time, retries=3, delay=2):
     url = "https://api.energifyn.dk/api/graph/consumptionprice?date=" + api_time
@@ -229,10 +253,11 @@ def get_daily_prices():
     east = prepare_data("east", response_data)
     return west, east
 
-def check_for_empty_elements(cloud_cover_data, temperature_data, west_prices, east_prices):
+def check_for_empty_elements(cloud_cover_data, temperature_data, wind_speed_data, west_prices, east_prices):
     datasets = {
         "Cloud Cover": cloud_cover_data,
         "Temperature": temperature_data,
+        "Wind Speed": wind_speed_data,
         "West Prices": west_prices,
         "East Prices": east_prices
     }
@@ -243,7 +268,8 @@ def check_for_empty_elements(cloud_cover_data, temperature_data, west_prices, ea
         else:
             pass
 
-def combine_hourly_data(start_timex, cloud_cover_data, temperature_data, west_prices, east_prices):
+
+def combine_hourly_data(start_timex, cloud_cover_data, temperature_data, wind_speed_data, west_prices, east_prices):
     combined_data = []
     start_time = start_timex.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -251,6 +277,7 @@ def combine_hourly_data(start_timex, cloud_cover_data, temperature_data, west_pr
         timestamp = start_time + timedelta(hours=hour)
         cloud_cover = cloud_cover_data[hour] if hour < len(cloud_cover_data) else None
         temperature = temperature_data[hour] if hour < len(temperature_data) else None
+        wind_speed = wind_speed_data[hour] if hour < len(wind_speed_data) else None
         west_price = west_prices[hour][1] if hour < len(west_prices) else None
         east_price = east_prices[hour][1] if hour < len(east_prices) else None
         
@@ -258,6 +285,7 @@ def combine_hourly_data(start_timex, cloud_cover_data, temperature_data, west_pr
             'timestamp': timestamp.isoformat(),
             'cloud_cover': cloud_cover,
             'temperature': temperature,
+            'wind_speed': wind_speed,  
             'west_price': west_price,
             'east_price': east_price
         })
@@ -289,43 +317,48 @@ def save_to_json(data, filename):
     with open(filename, 'w') as json_file:
         json.dump(existing_data, json_file, indent=4)
 
-
 def main():
     global response_data  # Declare it as global if you plan to modify it in other functions
     last_date = read_last_date()  # Read last date at the start
-    #start_date = datetime.strptime(input("Enter start date (YYYY-MM-DD): "), "%Y-%m-%d")
     start_date = last_date - timedelta(days=1)
-    #num_days = int(input("Enter number of days to retrieve data for: "))
     num_days = 100
     
-    combined_hourly_data = []
-
     for day in range(num_days):
+        combined_hourly_data = []
         current_date = start_date - timedelta(days=day)
         api_time, from_time, to_time = get_date_ranges(current_date)
 
+        # Fetch consumption and price data
         response_data = fetch_response_data(api_time)
         
+        # Fetch weather data
         cloud_cover_data = get_cloud_cover(from_time, to_time)
-
         temperature_data = get_temperature(from_time, to_time)
+        wind_speed_data = get_wind_speed(from_time, to_time)
 
+        # If any of the weather data is missing, skip the day
+        if cloud_cover_data is None or temperature_data is None or wind_speed_data is None:
+            print(f"Skipping data collection for {current_date.date()} due to missing data.")
+            continue  # Skip to the next day
+        
+        # Fetch price data
         west_prices, east_prices = get_daily_prices()
 
-        check_for_empty_elements(cloud_cover_data, temperature_data, west_prices, east_prices)
+        # Check for empty elements (can be omitted if we already skip missing data)
+        check_for_empty_elements(cloud_cover_data, temperature_data, wind_speed_data, west_prices, east_prices)
 
-        combined_hourly_data.extend(combine_hourly_data(current_date, cloud_cover_data, temperature_data, west_prices, east_prices))
+        # Combine hourly data
+        combined_hourly_data.extend(combine_hourly_data(current_date, cloud_cover_data, temperature_data, wind_speed_data, west_prices, east_prices))
         
         # Calculate and print the progress
         percentage_done = ((day + 1) / num_days) * 100
         print(f"Progress: {percentage_done:.2f}% done")
     
+        # Save the combined data for the current day
         save_to_json(combined_hourly_data, 'ml_data.json')
         save_last_date(current_date)  
     
     print("Data saved to ml_data.json")
-
-
 
 if __name__ == "__main__":
     quit_ = False
